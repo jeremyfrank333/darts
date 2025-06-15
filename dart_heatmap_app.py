@@ -64,7 +64,7 @@ def ev_grid(sig_timing, sig_lateral, theta_arm_board_deg,
     y0 = r_mesh * np.sin(th_mesh)
 
     # Board‑relative θ -> world angle
-    world_arm_rad = np.deg2rad(theta_arm_board_deg) - ROT_SHIFT
+    world_arm_rad = np.deg2rad(theta_arm_board_deg) + (np.pi/2 - ROT_SHIFT)
     ux, uy = np.cos(world_arm_rad), np.sin(world_arm_rad)     # along‑arm
     vx, vy = -np.sin(world_arm_rad), np.cos(world_arm_rad)    # across‑arm
 
