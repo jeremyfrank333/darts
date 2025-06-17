@@ -97,7 +97,7 @@ def draw_board(ax):
 
 # ---------------- Streamlit UI -----------------------
 st.set_page_config(layout="wide")
-st.title("Dart‑board Expected‑Value Heat‑map")
+st.title("Where should I aim my dart?")
 
 # sidebar toggles
 st.sidebar.header("Options")
