@@ -2,20 +2,17 @@
 """
 Streamlit app: dart_heatmap_polar_numbers.py
 
-Interactive dart-board EV visualiser.
+Interactive dart-board EV visualiser with:
+  • Toggle to enable/disable custom arm angle (default OFF, axis vertical)
+  • Toggle to link or separate timing vs lateral spreads (default LINKED)
+  • Fixed Monte‑Carlo sample size (N = 2500)   ← no UI element
 
-Toggles (in sidebar):
----------------------
-▸ **Enable custom arm angle** – default OFF (arm axis fixed vertical).
-▸ **Separate timing vs lateral spreads** – default OFF (single σ controls both).
-
-Visual elements:
-----------------
-▸ Heat‑map of expected score for every aim point
-▸ Gold ★ at optimal aim
-▸ Dashed ellipses (1 σ, 2 σ) showing landing spread
-▸ Dashed line along arm axis through the ★
-▸ Sector numbers and ring outlines
+Visuals:
+  • Heat‑map of expected score by aim point
+  • Sector numbers & ring outlines
+  • Gold ★ at optimal aim
+  • Dashed ellipses (1 σ & 2 σ) of landing spread
+  • Dashed line along the arm axis through the ★
 """
 
 import numpy as np
@@ -23,7 +20,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 from matplotlib.patches import Circle
 
-# ---------------- Board constants --------------------
+# ---------------- Board constants (mm) ----------------
 R_INNER_BULL, R_OUTER_BULL = 6.35, 15.9
 R_TRIPLE_IN, R_TRIPLE_OUT = 99.0, 107.0
 R_DOUBLE_IN, R_DOUBLE_OUT = 162.0, 170.0
@@ -33,9 +30,9 @@ SECTOR_VALUES = np.array([
      3,19, 7,16, 8,11,14, 9,12, 5
 ])
 
-ROT_SHIFT = np.pi/2 - np.pi/20   # rotate plot so 20 is at top
+ROT_SHIFT = np.pi/2 - np.pi/20   # rotate so 20 is at the top
 
-# ---------------- Scoring ----------------------------
+# ---------------- Scoring -----------------------------
 def score_polar(r, th):
     th_mod = np.mod(th, 2*np.pi)
     idx = (th_mod // (np.pi/10)).astype(int)
@@ -49,9 +46,9 @@ def score_polar(r, th):
     ring = (s == 0) & (r <= R_DOUBLE_OUT);           s[ring] = base[ring]
     return s
 
-# ---------------- EV grid ----------------------------
-def ev_grid(sig_t, sig_l, theta_board_deg, N, seed=1234,
-            r_grid=None, th_grid=None):
+# ---------------- EV grid -----------------------------
+def ev_grid(sig_t, sig_l, theta_board_deg, n_samples,
+            r_grid=None, th_grid=None, seed=1234):
     if r_grid is None:
         r_grid = np.arange(0.0, R_DOUBLE_IN, 4.0)
     if th_grid is None:
@@ -65,8 +62,8 @@ def ev_grid(sig_t, sig_l, theta_board_deg, N, seed=1234,
     vx, vy = -np.sin(world_arm), np.cos(world_arm)
 
     rng = np.random.default_rng(seed)
-    eps_t = rng.normal(0, sig_t, (N, 1))
-    eps_l = rng.normal(0, sig_l, (N, 1))
+    eps_t = rng.normal(0, sig_t, (n_samples, 1))
+    eps_l = rng.normal(0, sig_l, (n_samples, 1))
 
     xs = x0.ravel()[None, :] + eps_t*ux + eps_l*vx
     ys = y0.ravel()[None, :] + eps_t*uy + eps_l*vy
@@ -75,8 +72,7 @@ def ev_grid(sig_t, sig_l, theta_board_deg, N, seed=1234,
     return ev.reshape(r_grid.size, th_grid.size), r_grid, th_grid, world_arm
 
 # ---------------- Drawing helpers --------------------
-def boundary_angle(k):
-    return k*np.pi/10 + ROT_SHIFT
+def boundary_angle(k): return k*np.pi/10 + ROT_SHIFT
 
 def draw_board(ax):
     # rings
@@ -108,17 +104,17 @@ st.sidebar.header("Options")
 custom_angle = st.sidebar.checkbox("Enable custom arm angle", value=False)
 separate_spreads = st.sidebar.checkbox("Separate timing vs lateral spreads", value=False)
 
-# main sliders
-cols = st.columns(4)
+# main controls
+cols = st.columns(3)
 with cols[0]:
     if separate_spreads:
-        sig_t = st.slider("Timing σₜ (along‑arm)", 1, 100, 8, 1)
+        sig_t = st.slider("Timing σₜ (along‑arm, mm)", 1, 100, 8, 1)
     else:
-        sig_all = st.slider("Spread σ", 1, 100, 8, 1)
-        sig_t = sig_all
+        sigma = st.slider("Spread σ (mm)", 1, 100, 8, 1)
+        sig_t = sigma
 with cols[1]:
     if separate_spreads:
-        sig_l = st.slider("Lateral σₗ (across‑arm)", 1, 100, 8, 1)
+        sig_l = st.slider("Lateral σₗ (across‑arm, mm)", 1, 100, 8, 1)
     else:
         sig_l = sig_t
 with cols[2]:
@@ -127,16 +123,16 @@ with cols[2]:
     else:
         theta_board = 0
         st.markdown("Arm axis θ°: **0 (fixed)**")
-with cols[3]:
-    N = st.number_input("Monte‑Carlo darts", 500, 20000, 4000, 500)
+
+N_SAMPLES = 2500  # fixed Monte‑Carlo darts
 
 if st.button("Compute", type="primary"):
     with st.spinner("Simulating darts…"):
         ev, r_mm, th_deg, world_arm = ev_grid(
-            sig_t, sig_l, theta_board, int(N)
+            sig_t, sig_l, theta_board, N_SAMPLES
         )
 
-    # mesh edges
+    # pcolormesh edges
     r_edges = np.concatenate(([0], r_mm + (r_mm[1]-r_mm[0])/2))
     th_step = th_deg[1] - th_deg[0]
     th_edges = np.deg2rad(np.concatenate(
